@@ -69,6 +69,17 @@ pub fn add(vault: &mut Vault, key: &[u8; 32]) {
 
     println!("[!] Randomly generated secure password : {}", password);
 
+    let mut ctx = ClipboardContext::new().unwrap();
+
+    ctx.set_contents(password.clone()).unwrap();
+    println!("[✔]Random Generated Password copied to clipboard! It will be cleared in 25 seconds.");
+
+
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(25));
+        let _ = ctx.set_contents("".to_string());
+    });
+
     vault.accounts.insert(
         service_name,
         models::Credential {
