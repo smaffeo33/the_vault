@@ -1,9 +1,11 @@
-use rustyline::DefaultEditor;
-use rustyline::error::ReadlineError;
 use crate::crypto::save_vault_in_disk;
 use crate::models;
 use crate::models::Vault;
-use cli_clipboard::{ClipboardContext, ClipboardProvider};
+use crate::utils::clipboard;
+use rand;
+use rand::prelude::IndexedRandom;
+use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
 
 pub fn print_help() {
     let help_text = r#"Available commands:
@@ -38,6 +40,21 @@ pub fn delete(arg: Option<&str>, vault: &mut Vault, key: &[u8;32]) {
     }
 }
 
+pub fn generate(length: usize) -> String {
+    let charset: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+
+    let mut rng = rand::rng();
+
+    let password: String = (0..length)
+        .map(|_| {
+
+            *charset.choose(&mut rng).unwrap() as char
+        })
+        .collect();
+
+    password
+}
+
 pub fn add(vault: &mut Vault, key: &[u8; 32]) {
     let mut rl = DefaultEditor::new().expect("Failed to initialize readline");
 
@@ -60,25 +77,12 @@ pub fn add(vault: &mut Vault, key: &[u8; 32]) {
 
     println!("[!] Add new password for {} with username {}: (For secure random password leave blank)", service_name, username);
     let password = read_input(&mut rl).unwrap_or_else(|| {
-        let mut password = [0u8; 16];
-
-        rand::fill(&mut password);
-
-        hex::encode(&password)
+        generate(20)
     });
 
     println!("[!] Randomly generated secure password : {}", password);
 
-    let mut ctx = ClipboardContext::new().unwrap();
-
-    ctx.set_contents(password.clone()).unwrap();
-    println!("[✔]Random Generated Password copied to clipboard! It will be cleared in 25 seconds.");
-
-
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(25));
-        let _ = ctx.set_contents("".to_string());
-    });
+   clipboard(&password);
 
     vault.accounts.insert(
         service_name,
@@ -234,8 +238,6 @@ pub fn get_all( vault: &Vault) {
 
 pub fn get(arg: Option<&str>, vault: &mut Vault) {
 
-    let mut ctx = ClipboardContext::new().unwrap();
-
     let service_name = match arg {
         Some(name) => name,
         None => {
@@ -249,15 +251,7 @@ pub fn get(arg: Option<&str>, vault: &mut Vault) {
         println!("Username: {}", credential.username);
         println!("Password: {}", credential.password_plana);
 
-        ctx.set_contents(credential.password_plana.clone()).unwrap();
-        println!("[✔] Password copied to clipboard! It will be cleared in 20 seconds.");
-
-
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(20));
-            let _ = ctx.set_contents("".to_string());
-        });
-
+        clipboard(&credential.password_plana);
 
 
 

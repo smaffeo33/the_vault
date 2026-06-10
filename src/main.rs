@@ -1,12 +1,12 @@
+use crate::commands::{add, delete, edit, generate, get, get_all, print_help};
 use crate::crypto::{generate_salt, save_vault_in_disk};
 use crate::models::Vault;
+use crate::utils::{clipboard, print_banner, print_welcome};
+use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
 use std::io;
 use std::io::Write;
 use std::path::Path;
-use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
-use crate::commands::{add, delete, edit, get, get_all, print_help};
-use crate::utils::{print_banner, print_welcome};
 
 mod models;
 mod crypto;
@@ -132,6 +132,17 @@ fn interactive_terminal(vault: &mut Vault, key: &[u8; 32]) {
                         print_banner();
                         continue;
                     },
+                    Some("generate") => {
+                        let size_arg = commands.next();
+                        let length = match size_arg {
+                            Some(val) => val.parse::<usize>().unwrap_or(16),
+                            None => 16,
+                        };
+                        let random_pass = generate(length);
+                        println!("Your random generated password is {}", random_pass);
+                        clipboard(&random_pass);
+
+                    }
                     Some("get") => {
                         let service = commands.next();
 

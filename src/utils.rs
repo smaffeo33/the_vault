@@ -1,3 +1,4 @@
+use cli_clipboard::{ClipboardContext, ClipboardProvider};
 
 pub fn print_banner() {
     let banner = r#"░██████████░██                      ░██                                                                   ░██    ░██
@@ -40,4 +41,17 @@ pub fn print_welcome() {
                         "#;
 
     println!("{}", banner);
+}
+
+pub fn clipboard(password: &str) {
+    let mut ctx = ClipboardContext::new().unwrap();
+
+    ctx.set_contents(password.to_string()).unwrap();
+    println!("[✔]Random Generated Password copied to clipboard! It will be cleared in 25 seconds.");
+
+
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(25));
+        let _ = ctx.set_contents("".to_string());
+    });
 }
