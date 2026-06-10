@@ -47,7 +47,7 @@ pub fn clipboard(password: &str) {
     let mut ctx = ClipboardContext::new().unwrap();
 
     ctx.set_contents(password.to_string()).unwrap();
-    println!("[✔]Random Generated Password copied to clipboard! It will be cleared in 25 seconds.");
+    println!("[✔]Password copied to clipboard! It will be cleared in 25 seconds.");
 
 
     std::thread::spawn(move || {

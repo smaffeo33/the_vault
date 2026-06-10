@@ -14,6 +14,7 @@ pub fn print_help() {
     - add: Add new credentials for a service.
     - edit <service_name>: Edit credentials for a specific service.
     - delete <service_name>: Delete credentials for a specific service.
+    - generate <length>: Generates a Random Secure Password of length <length>
     - help: Show this help message.
     - clear: clears the screen.
     - q: Quit the application.
