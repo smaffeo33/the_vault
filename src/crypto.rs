@@ -1,5 +1,6 @@
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
+use aes_gcm::aead::generic_array::GenericArray;
 use argon2::Argon2;
 use crate::FILE_PATH;
 use crate::models::Vault;
@@ -44,8 +45,26 @@ pub fn encrypt_data(json_text: &str, key: &[u8]) -> Result<Vec<u8>,  String> {
 }
 
 pub fn decrypt_data(encrypted_data: &[u8], key: &[u8; 32]) -> Result<String, String> {
+    if encrypted_data.len() < 12 {
+        return Err("Encrypted data is too short (missing nonce)".to_string());
+    }
 
-    todo!()
+    let nonce_bytes = &encrypted_data[0..12];
+    let ciphertext_bytes = &encrypted_data[12..];
+
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| format!("Error creating cipher: {}", e))?;
+
+    let nonce = GenericArray::from_slice(nonce_bytes);
+
+    let decrypted_bytes = cipher
+        .decrypt(nonce, ciphertext_bytes)
+        .map_err(|e| format!("Error decrypting data: {}", e))?;
+
+    let plaintext_string = String::from_utf8(decrypted_bytes)
+        .map_err(|e| format!("Invalid UTF-8 sequence inside vault: {}", e))?;
+
+    Ok(plaintext_string)
 }
 
 pub fn save_vault_in_disk(vault: &Vault, key: &[u8; 32]) {
