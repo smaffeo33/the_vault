@@ -3,6 +3,7 @@ use rustyline::error::ReadlineError;
 use crate::crypto::save_vault_in_disk;
 use crate::models;
 use crate::models::Vault;
+use cli_clipboard::{ClipboardContext, ClipboardProvider};
 
 pub fn print_help() {
     let help_text = r#"Available commands:
@@ -57,11 +58,16 @@ pub fn add(vault: &mut Vault, key: &[u8; 32]) {
         None => return,
     };
 
-    println!("[!] Add new password for {} with username {}:", service_name, username);
-    let password = match read_input(&mut rl) {
-        Some(pass) => pass,
-        None => return,
-    };
+    println!("[!] Add new password for {} with username {}: (For secure random password leave blank)", service_name, username);
+    let password = read_input(&mut rl).unwrap_or_else(|| {
+        let mut password = [0u8; 16];
+
+        rand::fill(&mut password);
+
+        hex::encode(&password)
+    });
+
+    println!("[!] Randomly generated secure password : {}", password);
 
     vault.accounts.insert(
         service_name,
@@ -72,11 +78,11 @@ pub fn add(vault: &mut Vault, key: &[u8; 32]) {
     );
 
     save_vault_in_disk(vault, key);
-    println!("[✔] Service added successfully.");
+    println!("[✔] Service added successfully. ");
 }
 
 fn read_input(rl: &mut DefaultEditor) -> Option<String> {
-    match rl.readline("> ") {
+    match rl.readline("$ ") {
         Ok(input) => {
             let cleaned = input.trim().to_string();
             if cleaned.is_empty() {
@@ -99,24 +105,24 @@ fn read_input(rl: &mut DefaultEditor) -> Option<String> {
     }
 }
 
-pub fn edit( vault: &mut Vault, key: &[u8;32] ) {
+pub fn edit(arg : Option<&str>, vault: &mut Vault, key: &[u8;32] ) {
     let mut rl = DefaultEditor::new().expect("Failed to initialize readline");
 
 
-    println!("[!] Which service do you want to modify:");
-
-
-    let service = match read_input(&mut rl) {
-        Some(service) => service,
-        None => return,
+    let service_name = match arg {
+        Some(name) => name,
+        None => {
+            println!("[!] Error: Please provide a Service name. (Usage: get <service>)");
+            return;
+        }
     };
 
-    if !vault.accounts.contains_key(&service) {
-        println!("[!] Unknown service '{}' does not exists.", service);
+    if !vault.accounts.contains_key(service_name) {
+        println!("[!] Unknown service '{}' does not exists.", service_name);
         return;
     }
 
-    println!("[!] What do you want to edit: (service_name, username, password, help or q to quit");
+    println!("[!] What do you want to edit: (service_name, username, password, help or q to quit)");
 
 
     let command = match read_input(&mut rl) {
@@ -133,12 +139,12 @@ pub fn edit( vault: &mut Vault, key: &[u8;32] ) {
                 None => return,
             };
 
-            if let Some(credential_backup) = vault.accounts.remove(&service) {
+            if let Some(credential_backup) = vault.accounts.remove(service_name) {
                 vault.accounts.insert(new_name, credential_backup);
                 println!("[✔] Service name updated successfully.");
                 save_vault_in_disk(vault, key);
             } else {
-                println!("[!] Error: Service '{}' not found.", service);
+                println!("[!] Error: Service '{}' not found.", service_name);
             }
         },
         "username" => {
@@ -149,9 +155,9 @@ pub fn edit( vault: &mut Vault, key: &[u8;32] ) {
                 None => return,
             };
 
-            if let Some(credential_backup) = vault.accounts.remove(&service) {
+            if let Some(credential_backup) = vault.accounts.remove(service_name) {
                 vault.accounts.insert(
-                    service.clone(),
+                    service_name.to_string(),
                     models::Credential {
                         username: new_name,
                         password_plana: credential_backup.password_plana,
@@ -170,10 +176,10 @@ pub fn edit( vault: &mut Vault, key: &[u8;32] ) {
 
             let new_pass = rpassword::read_password().expect("Failed to read password");
 
-            if let Some(credential_backup) = vault.accounts.remove(&service) {
-                vault.accounts.insert(service.trim().to_string(), models::Credential{
+            if let Some(credential_backup) = vault.accounts.remove(service_name) {
+                vault.accounts.insert(service_name.to_string(), models::Credential{
                     username: credential_backup.username,
-                    password_plana: new_pass.trim().to_string(),
+                    password_plana: new_pass,
                 });
                 println!("[✔] Password updated successfully.");
 
@@ -186,7 +192,6 @@ pub fn edit( vault: &mut Vault, key: &[u8;32] ) {
         "q" => {return}
         _ => {println!("Invalid command. See help"); return;}
     }
-
 }
 
 fn print_edit_help() {
@@ -217,6 +222,9 @@ pub fn get_all( vault: &Vault) {
 }
 
 pub fn get(arg: Option<&str>, vault: &mut Vault) {
+
+    let mut ctx = ClipboardContext::new().unwrap();
+
     let service_name = match arg {
         Some(name) => name,
         None => {
@@ -229,6 +237,19 @@ pub fn get(arg: Option<&str>, vault: &mut Vault) {
         println!("[✔] Service '{}' found.", service_name);
         println!("Username: {}", credential.username);
         println!("Password: {}", credential.password_plana);
+
+        ctx.set_contents(credential.password_plana.clone()).unwrap();
+        println!("[✔] Password copied to clipboard! It will be cleared in 20 seconds.");
+
+
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(20));
+            let _ = ctx.set_contents("".to_string());
+        });
+
+
+
+
     } else {
         println!("[!] Service '{}' not found.", service_name);
 

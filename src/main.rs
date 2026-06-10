@@ -120,20 +120,63 @@ fn interactive_terminal(vault: &mut Vault, key: &[u8; 32]) {
 
                 match commands.next() {
                     Some("q") => {
+                        // if the usage is q <garbage> i dont care, the user wants to exit
                         let _ = rl.save_history("history.txt");
                         return;
                     },
                     Some("clear") => {
+                        // if the usage is clear <garbage> i dont care, the user wants to clear
+
                         print!("\x1B[2J\x1B[1;1H");
                         io::stdout().flush().unwrap();
                         print_banner();
                         continue;
                     },
-                    Some("get") => get(commands.next(), vault),
-                    Some("all") => get_all(vault),
-                    Some("edit") => edit(vault, key),
-                    Some("add") => add(vault, key),
-                    Some("delete") => delete(commands.next(), vault, key),
+                    Some("get") => {
+                        let service = commands.next();
+
+                        if commands.next().is_some() {
+                            println!("[!] Error: Too many arguments. Usage: get <service_name>");
+                            continue;
+                        }
+
+                        get(service, vault);
+                    },
+                    Some("all") => {
+                        if commands.next().is_some() {
+                            println!("[!] Error: Too many arguments. Usage: all");
+                            continue;
+                        }
+
+                        get_all(vault)
+                    },
+                    Some("edit") => {
+                        let service = commands.next();
+
+
+                        if commands.next().is_some() {
+                            println!("[!] Error: Too many arguments. Usage: edit <service>");
+                            continue;
+                        }
+                        edit(service, vault, key)
+                    },
+                    Some("add") => {
+                        if commands.next().is_some() {
+                            println!("[!] Error: Too many arguments. Usage: all");
+                            continue;
+                        }
+                        add(vault, key)
+                    },
+                    Some("delete") => {
+                        let service = commands.next();
+
+                        if commands.next().is_some() {
+                            println!("[!] Error: Too many arguments. Usage: delete <service_name>");
+                            continue;
+                        }
+
+                        delete(service, vault, key)
+                    },
                     Some("help") => print_help(),
                     Some(_) => println!("Unknown command."),
                     _ => {}
