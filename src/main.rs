@@ -3,9 +3,15 @@ use crate::models::Vault;
 use std::io;
 use std::io::Write;
 use std::path::Path;
+use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
+use crate::commands::{add, delete, edit, get, get_all, print_help};
+use crate::utils::{print_banner, print_welcome};
 
 mod models;
 mod crypto;
+mod commands;
+mod utils;
 
 const FILE_PATH: &str = "vault.data";
 
@@ -50,7 +56,6 @@ fn main() {
 
             save_vault_in_disk(&vault, &key);
 
-            // std::fs::write("/tmp/vault_test.data", encrypted_bytes).expect("Failed to write to disk");
             println!("[✔] Vault created and initialized successfully!");
             break
         }
@@ -96,289 +101,59 @@ fn initialized_vault_case() {
 fn interactive_terminal(vault: &mut Vault, key: &[u8; 32]) {
     println!("Welcome back to your bunker. Drop your commands below.");
 
+    let mut rl = DefaultEditor::new().expect("Failed to initialize readline");
+
+    let _ = rl.load_history("history.txt");
+
     loop {
-        print!("> ");
-        io::stdout().flush().unwrap();
+        let readline = rl.readline("> ");
 
-        let mut input_command = String::new(); io::stdin().read_line(&mut input_command).unwrap();
+        match readline {
+            Ok(input_command) => {
+                if input_command.trim().is_empty() {
+                    continue;
+                }
 
-        let mut commands = input_command.split_whitespace();
+                let _ = rl.add_history_entry(input_command.as_str());
 
-        //TODO: clean the iter of commands (Do not let them write more arguments)
+                let mut commands = input_command.split_whitespace();
 
-        match commands.next() {
-            Some("q")  => return,
-            Some("get") => get(commands.next(), vault),
-            Some("all") => get_all(vault),
-            Some("edit") => edit(vault, key),
-            Some("add") => add(vault, key),
-            Some("delete") => delete(commands.next(), vault, key),
-            Some("help") => print_help(),
-            Some("clear") => {
-                // Código ANSI: \x1B[2J borra la pantalla, \x1B[1;1H mueve el cursor a la fila 1, col 1
-                print!("\x1B[2J\x1B[1;1H");
-                io::stdout().flush().unwrap();
-
-                print_banner();
-                continue;
+                match commands.next() {
+                    Some("q") => {
+                        let _ = rl.save_history("history.txt");
+                        return;
+                    },
+                    Some("clear") => {
+                        print!("\x1B[2J\x1B[1;1H");
+                        io::stdout().flush().unwrap();
+                        print_banner();
+                        continue;
+                    },
+                    Some("get") => get(commands.next(), vault),
+                    Some("all") => get_all(vault),
+                    Some("edit") => edit(vault, key),
+                    Some("add") => add(vault, key),
+                    Some("delete") => delete(commands.next(), vault, key),
+                    Some("help") => print_help(),
+                    Some(_) => println!("Unknown command."),
+                    _ => {}
+                }
+            },
+            Err(ReadlineError::Interrupted) => {
+                println!("[!] Interrupted (Ctrl+C). Exiting...");
+                let _ = rl.save_history("history.txt");
+                break;
+            },
+            Err(ReadlineError::Eof) => {
+                println!("[!] EOF (Ctrl+D). Exiting...");
+                let _ = rl.save_history("history.txt");
+                break;
+            },
+            Err(err) => {
+                println!("[!] Error reading input: {:?}", err);
+                break;
             }
-            Some(_) => {println!("Unknown command. Use help to view list of commands"); continue}
-            None => {println!("Command is needed"); continue}
         }
     }
-
 }
 
-fn print_help() {
-    let help_text = r#"Available commands:
-    - get <service_name>: Retrieve credentials for a specific service.
-    - all: List all stored services.
-    - add: Add new credentials for a service.
-    - edit <service_name>: Edit credentials for a specific service.
-    - delete <service_name>: Delete credentials for a specific service.
-    - help: Show this help message.
-    - clear: clears the screen.
-    - q: Quit the application.
-    "#;
-    println!("{}", help_text);
-}
-
-fn delete(arg: Option<&str>, vault: &mut Vault, key: &[u8;32]) {
-    let service_name = match arg {
-        Some(name) => name,
-        None => {
-            println!("[!] Error: Service name to be deleted is required. (Usage: delete <service>)");
-            return;
-        }
-    };
-
-    if vault.accounts.remove(service_name).is_some() {
-        save_vault_in_disk(vault, key);
-        //if it gets here then it was deleted succeffully.
-        println!("[✔] Service '{}' deleted successfully.", service_name);
-
-    } else {
-        println!("[!] Service '{}' not found.", service_name);
-    }
-}
-
-fn add( vault: &mut Vault, key: &[u8;32] ) {
-
-    println!("[!] Service name:");
-    print!("> ");
-    io::stdout().flush().unwrap();
-
-    let mut service = String::new();
-    io::stdin().read_line(&mut service).unwrap();
-    let service = service.trim().to_string();
-
-    if vault.accounts.get(&service).is_some() {
-        println!("[!] Service '{}' already exists. Use 'edit' command to modify it.", service);
-        return;
-    }
-
-    println!("[!] Add new username for {}:", service);
-    print!("> ");
-    io::stdout().flush().unwrap();
-
-    let mut username = String::new();
-    io::stdin().read_line(&mut username).unwrap();
-
-    println!("[!] Add new password for {} with username {}:", service, username);
-    print!("> ");
-    io::stdout().flush().unwrap();
-
-    let mut password = String::new();
-    io::stdin().read_line(&mut password).unwrap();
-
-
-    vault.accounts.insert(service.trim().to_string(), models::Credential {
-        username: username.trim().to_string(),
-        password_plana: password.trim().to_string(),
-    });
-    save_vault_in_disk(vault, key);
-     println!("[✔] Service added successfully.");
-
-
-}
-
-fn edit( vault: &mut Vault, key: &[u8;32] ) {
-    println!("[!] Which service do you want to modify:");
-    print!("> ");
-    io::stdout().flush().unwrap();
-
-
-    let mut service_input  = String::new();
-    io::stdin().read_line(&mut service_input).unwrap();
-    let service = service_input.trim().to_string();
-
-    if !vault.accounts.contains_key(&service) {
-        println!("[!] Unknown service '{}' does not exists.", service);
-        return;
-    }
-
-    println!("[!] What do you want to edit: (service_name, username, password, help or q to quit");
-    print!("> ");
-    io::stdout().flush().unwrap();
-
-
-    let mut command = String::new();
-    io::stdin().read_line(&mut command).unwrap();
-
-    match command.trim() {
-        "service_name" => {
-            println!("[!] Enter the new service name:");
-            print!("> ");
-            io::stdout().flush().unwrap();
-
-            let mut new_name = String::new();
-            io::stdin().read_line(&mut new_name).unwrap();
-
-            if let Some(credential_backup) = vault.accounts.remove(&service) {
-                vault.accounts.insert(new_name.trim().to_string(), credential_backup);
-                println!("[✔] Service name updated successfully.");
-
-                save_vault_in_disk(vault, key);
-            } else {
-                println!("[!] Error: Service '{}' not found.", service);
-            }
-        },
-        "username" => {
-            println!("[!] Enter the new username:");
-            print!("> ");
-            io::stdout().flush().unwrap();
-
-            let mut new_name = String::new();
-            io::stdin().read_line(&mut new_name).unwrap();
-            let new_name = new_name.trim().to_string();
-
-            if let Some(credential_backup) = vault.accounts.remove(&service) {
-                vault.accounts.insert(
-                    service.clone(),
-                    models::Credential {
-                        username: new_name,
-                        password_plana: credential_backup.password_plana,
-                    }
-                );
-                println!("[✔] Username updated successfully.");
-
-                save_vault_in_disk(vault, key);
-            } else {
-                println!("[!] Error: Username could not be updated.");
-            }
-        },
-        "password" => {
-            println!("[!] Enter the new password:");
-            print!("> ");
-            io::stdout().flush().unwrap();
-
-            let new_pass = rpassword::read_password().expect("Failed to read password");
-
-            if let Some(credential_backup) = vault.accounts.remove(&service) {
-                vault.accounts.insert(service.trim().to_string(), models::Credential{
-                    username: credential_backup.username,
-                    password_plana: new_pass.trim().to_string(),
-                });
-                println!("[✔] Password updated successfully.");
-
-                save_vault_in_disk(vault, key);
-            } else {
-                println!("[!] Error: Password could not be updated.");
-            }
-        },
-        "help" => {print_edit_help()},
-        "q" => {return}
-        _ => {println!("Invalid command. See help"); return;}
-    }
-
-}
-
-fn print_edit_help() {
-    let help_text = r#"Available commands:
-    - service_name: Edit the name of the service.
-    - username: Edit the username for the service.
-    - password: Edit the password for the password.
-    - help: Show this help message.
-    - quit: Quit the edit interface.
-    "#;
-    println!("{}", help_text);
-}
-
-
-fn get_all( vault: &Vault) {
-    if vault.accounts.is_empty() {
-        println!("[!] No services stored in the vault.");
-        return;
-    }
-
-
-    for (service, credentials) in &vault.accounts {
-        println!("Service: {}", service);
-        println!("username: {} - password: {}", credentials.username, credentials.password_plana.replace(&credentials.password_plana, "********"));
-        println!("==============================");
-
-    }
-}
-
-fn get(arg: Option<&str>, vault: &mut Vault) {
-    let service_name = match arg {
-        Some(name) => name,
-        None => {
-            println!("[!] Error: Please provide a Service name. (Usage: get <service>)");
-            return;
-        }
-    };
-
-    if let Some(credential) = vault.accounts.get(service_name) {
-        println!("[✔] Service '{}' found.", service_name);
-        println!("Username: {}", credential.username);
-        println!("Password: {}", credential.password_plana);
-    } else {
-        println!("[!] Service '{}' not found.", service_name);
-
-    }
-
-}
-
-fn print_banner() {
-    let banner = r#"░██████████░██                      ░██                                                                   ░██    ░██
-    ░██    ░██                                                                                            ░██    ░██
-    ░██    ░████████   ░███████     ░██░██░████  ░███████  ░████████     ░██    ░██  ░██████   ░██    ░██ ░██ ░████████
-    ░██    ░██    ░██ ░██    ░██    ░██░███     ░██    ░██ ░██    ░██    ░██    ░██       ░██  ░██    ░██ ░██    ░██
-    ░██    ░██    ░██ ░█████████    ░██░██      ░██    ░██ ░██    ░██     ░██  ░██   ░███████  ░██    ░██ ░██    ░██
-    ░██    ░██    ░██ ░██           ░██░██      ░██    ░██ ░██    ░██      ░██░██   ░██   ░██  ░██   ░███ ░██    ░██
-    ░██    ░██    ░██  ░███████     ░██░██       ░███████  ░██    ░██       ░███     ░█████░██  ░█████░██ ░██     ░████
-
-
-
-               ░████
-              ░██
- ░███████  ░████████
-░██    ░██    ░██
-░██    ░██    ░██
-░██    ░██    ░██
- ░███████     ░██
-
-
-
-░██
-░██
-░████████  ░██░████  ░██████    ░██████   ░██    ░██  ░███████   ░███████
-░██    ░██ ░███           ░██        ░██  ░██    ░██ ░██    ░██ ░██
-░██    ░██ ░██       ░███████   ░███████   ░██  ░██  ░██    ░██  ░███████
-░███   ░██ ░██      ░██   ░██  ░██   ░██    ░██░██   ░██    ░██        ░██
-░██░█████  ░██       ░█████░██  ░█████░██    ░███     ░███████   ░███████
-
-
-                                                                                                                        "#;
-    println!("{}", banner);
-}
-
-fn print_welcome() {
-    let banner = r#"▖  ▖  ▜            ▗
-▌▞▖▌█▌▐ ▛▘▛▌▛▛▌█▌  ▜▘▛▌▖
-▛ ▝▌▙▖▐▖▙▖▙▌▌▌▌▙▖  ▐▖▙▌▖
-                        "#;
-
-    println!("{}", banner);
-}
