@@ -114,7 +114,15 @@ fn interactive_terminal(vault: &mut Vault, key: &[u8; 32]) {
             Some("add") => add(vault, key),
             Some("delete") => delete(commands.next(), vault, key),
             Some("help") => print_help(),
-            Some(_) => {println!("Unknown command."); continue}
+            Some("clear") => {
+                // Código ANSI: \x1B[2J borra la pantalla, \x1B[1;1H mueve el cursor a la fila 1, col 1
+                print!("\x1B[2J\x1B[1;1H");
+                io::stdout().flush().unwrap();
+
+                print_banner();
+                continue;
+            }
+            Some(_) => {println!("Unknown command. Use help to view list of commands"); continue}
             None => {println!("Command is needed"); continue}
         }
     }
@@ -129,6 +137,7 @@ fn print_help() {
     - edit <service_name>: Edit credentials for a specific service.
     - delete <service_name>: Delete credentials for a specific service.
     - help: Show this help message.
+    - clear: clears the screen.
     - q: Quit the application.
     "#;
     println!("{}", help_text);
@@ -155,7 +164,7 @@ fn delete(arg: Option<&str>, vault: &mut Vault, key: &[u8;32]) {
 
 fn add( vault: &mut Vault, key: &[u8;32] ) {
 
-    println!("[!] Add new credentials for a service:");
+    println!("[!] Service name:");
     print!("> ");
     io::stdout().flush().unwrap();
 
@@ -203,8 +212,15 @@ fn edit( vault: &mut Vault, key: &[u8;32] ) {
     io::stdin().read_line(&mut service_input).unwrap();
     let service = service_input.trim().to_string();
 
-    println!("[!] What do you want to edit:");
+    if !vault.accounts.contains_key(&service) {
+        println!("[!] Unknown service '{}' does not exists.", service);
+        return;
+    }
+
+    println!("[!] What do you want to edit: (service_name, username, password, help or q to quit");
     print!("> ");
+    io::stdout().flush().unwrap();
+
 
     let mut command = String::new();
     io::stdin().read_line(&mut command).unwrap();
@@ -271,8 +287,8 @@ fn edit( vault: &mut Vault, key: &[u8;32] ) {
             }
         },
         "help" => {print_edit_help()},
-        "quit" => {return}
-        _ => {println!("Invalid command. See edit help"); return;}
+        "q" => {return}
+        _ => {println!("Invalid command. See help"); return;}
     }
 
 }
@@ -308,7 +324,7 @@ fn get(arg: Option<&str>, vault: &mut Vault) {
     let service_name = match arg {
         Some(name) => name,
         None => {
-            println!("[!] Error: Service name to be gotten is required. (Usage: get <service>)");
+            println!("[!] Error: Please provide a Service name. (Usage: get <service>)");
             return;
         }
     };
