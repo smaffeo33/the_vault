@@ -2,7 +2,7 @@ use crate::commands::{add, delete, edit, generate, get, get_all, print_help};
 use crate::crypto::{generate_salt, save_vault_in_disk};
 use crate::models::Vault;
 use crate::utils::{clipboard, print_banner, print_welcome};
-use rustyline::error::ReadlineError;
+    use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::io;
 use std::io::Write;
@@ -173,7 +173,7 @@ fn interactive_terminal(vault: &mut Vault, key: &[u8; 32]) {
                     },
                     Some("add") => {
                         if commands.next().is_some() {
-                            println!("[!] Error: Too many arguments. Usage: all");
+                            println!("[!] Error: Too many arguments. Usage: add");
                             continue;
                         }
                         add(vault, key)

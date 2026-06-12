@@ -125,6 +125,7 @@ pub fn edit(arg : Option<&str>, vault: &mut Vault, key: &[u8;32] ) {
     let mut rl = DefaultEditor::new().expect("Failed to initialize readline");
 
 
+
     let service_name = match arg {
         Some(name) => name,
         None => {
